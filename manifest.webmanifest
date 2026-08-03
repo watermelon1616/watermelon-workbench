@@ -1,0 +1,29 @@
+{
+  "name": "Watermelon 的工作台",
+  "short_name": "Watermelon",
+  "description": "御用金库 · 每日播客 · 天人合一（黄帝内经）· 口语练习 等个人工作台",
+  "id": "/",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#FFF8D6",
+  "theme_color": "#FFE04D",
+  "categories": ["productivity", "education", "health"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
