@@ -388,10 +388,10 @@ const TodoModule = (() => {
     if (!h) return;
     if (act === 'toggle') {
       h.history = h.history || [];
-      const i = h.history.indexOf(T());
+      const i = h.history.indexOf(viewDate);
       if (i >= 0) h.history.splice(i, 1);
       else {
-        h.history.push(T());
+        h.history.push(viewDate);
         h.history.sort();
         const st = habitStreak(h);
         U.celebrate('你真棒！这个自律的小西瓜 🍉');
@@ -417,7 +417,8 @@ const TodoModule = (() => {
     if (!t) return;
     if (act === 'toggle' || act === 'undo') {
       t.done = !t.done;
-      t.doneAt = t.done ? Store.nowISO() : null;
+      // 打勾记录到「正在查看的那天」，这样补打昨天的✓不会算到今天
+      t.doneAt = t.done ? (viewDate + 'T' + Store.nowISO().slice(11)) : null;
       if (t.done) U.celebrate('你真棒！这个自律的小西瓜 🍉');
       afterChange();
     } else if (act === 'edit') {

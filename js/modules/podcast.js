@@ -1,6 +1,7 @@
 /* ==========================================================
    播客 —— 金融 / 理财 / 人际交往 / 提升自我
-   卡片浏览 + 全文阅读 + 朗读收听 + 笔记
+   卡片浏览 + 全文阅读 + 录音带收听 + 笔记
+   今日推荐博客：读完才换下一期；支持连读；可跳去喜马拉雅
    ========================================================== */
 
 const PodcastModule = (() => {
@@ -19,7 +20,7 @@ const PodcastModule = (() => {
     growth: 'linear-gradient(130deg,#FFE1E4,#FFC9CF)'
   };
 
-  // 今日推荐博客：头部热门 + 中腰部优质（粤语 / 普通话可听）
+  // 今日推荐博客：头部热门 + 中腰部优质（粤语 / 普通话可听，读完才换下一期）
   const BLOGS = [
     {
       tier: '头部热门', title: '普通人怎么用现金流思维管钱', author: '远山财经', tag: '理财',
@@ -52,6 +53,9 @@ const PodcastModule = (() => {
   let reading = null;
 
   function d() { return Store.data.podcast; }
+  function blogCursor() { if (d().blogCursor == null) d().blogCursor = 0; return d().blogCursor; }
+  function blogDone() { if (!d().blogDone) d().blogDone = []; return d().blogDone; }
+  function chainOn() { return !!Store.data.settings.blogChain; }
 
   function render() {
     if (reading) return renderReader();
@@ -60,7 +64,7 @@ const PodcastModule = (() => {
     const todayPick = PODCAST_CORPUS[U.dayIndex(PODCAST_CORPUS.length)];
 
     document.getElementById('view').innerHTML = `
-      <!-- 今日推荐 -->
+      <!-- 今日推荐（主节目，每天自动换） -->
       <section class="card fade-in" style="background:linear-gradient(125deg,#FFF6DC,#FFE1E4);border:none">
         <div class="card-head">
           <h2>🎧 每日推荐</h2>
@@ -137,32 +141,48 @@ const PodcastModule = (() => {
       </div>`;
   }
 
-  // ---------- 今日推荐博客 ----------
+  // ---------- 今日推荐博客（读完才换下一期 + 连读 + 喜马拉雅） ----------
   function renderBlogs() {
+    const i = blogCursor();
+    const b = BLOGS[i];
+    const done = blogDone().includes(i);
+    const xmly = 'https://www.ximalaya.com/search/' + encodeURIComponent(b.title);
     return `
       <section class="card fade-in" style="margin-top:18px;background:linear-gradient(125deg,#FFF3E0,#FDEBF2);border:none">
         <div class="card-head">
           <h2>🎙️ 今日推荐博客</h2>
           <span class="tag red">头部热门 + 中腰部优质</span>
           <div class="spacer"></div>
-          <span class="sub">点语言按钮听粤语 / 普通话</span>
+          <label class="chain"><input type="checkbox" id="blogChain" ${chainOn() ? 'checked' : ''}> 连读（听完自动播下一个）</label>
         </div>
         <div class="blog-list">
-          ${BLOGS.map(b => `
-            <div class="blog-item">
-              <div class="blog-head">
-                <span class="blog-tier ${b.tier === '头部热门' ? 'hot' : ''}">${b.tier}</span>
-                <span class="blog-title">${U.esc(b.title)}</span>
-              </div>
-              <div class="blog-meta">${U.esc(b.author)} · ${U.esc(b.tag)}</div>
-              <div class="blog-sum">${U.esc(b.summary)}</div>
-              <div class="blog-ops">
-                <button class="btn sm" data-blog-audio="${U.esc(b.text)}" data-lang="zh-HK">🗣️ 粤语</button>
-                <button class="btn sm" data-blog-audio="${U.esc(b.text)}" data-lang="zh-CN">🗣️ 普通话</button>
-              </div>
-            </div>`).join('')}
+          <div class="blog-item" style="border:2px solid ${done ? '#3FAE7B' : '#FFD9A8'}">
+            <div class="blog-head">
+              <span class="blog-tier ${b.tier === '头部热门' ? 'hot' : ''}">${b.tier}</span>
+              <span class="blog-title">${U.esc(b.title)}</span>
+              ${done ? '<span class="tag green" style="margin-left:8px">本期已读完 ✓</span>' : ''}
+            </div>
+            <div class="blog-meta">${U.esc(b.author)} · ${U.esc(b.tag)} · 第 ${i + 1} / ${BLOGS.length} 期</div>
+            <div class="blog-sum">${U.esc(b.summary)}</div>
+            <div class="blog-ops">
+              <button class="btn sm" data-blog="${i}" data-lang="zh-HK">🗣️ 粤语</button>
+              <button class="btn sm" data-blog="${i}" data-lang="zh-CN">🗣️ 普通话</button>
+              <a class="btn sm ghost" href="${xmly}" target="_blank" rel="noopener">📻 喜马拉雅收听</a>
+              <button class="btn sm ${done ? '' : 'green'}" id="blogDone">${done ? '已读完' : '我读完了，换下一期'}</button>
+            </div>
+          </div>
         </div>
+        <div class="cal-tip">🟢 没读完不会换内容；点「我读完了」后第二天才会推下一期。粤语用的是系统粤语嗓音，部分设备无粤语嗓音会自动用普通话。</div>
       </section>`;
+  }
+
+  function playBlogChain(startIdx, lang) {
+    const list = [];
+    for (let k = 0; k < BLOGS.length; k++) {
+      const idx = (startIdx + k) % BLOGS.length;
+      list.push({ text: BLOGS[idx].text, lang });
+    }
+    Speech.speakQueue(list, { rate: 0.9, formal: false });
   }
 
   // ---------- 阅读器 ----------
@@ -174,7 +194,6 @@ const PodcastModule = (() => {
     if (!p) { reading = null; return render(); }
     const note = d().notes[p.id] || '';
 
-    // 把正文拆成可朗读的分段，每段一个序号，方便高亮
     const segs = [];
     const blocks = [];
     const strip = (s) => String(s).replace(/<[^>]+>/g, '');
@@ -239,14 +258,38 @@ const PodcastModule = (() => {
     document.querySelectorAll('[data-open]').forEach(b => {
       b.onclick = (e) => { e.stopPropagation(); killCass(); reading = b.dataset.open; Speech.stop(); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     });
-    document.querySelectorAll('[data-blog-audio]').forEach(b => {
+
+    // 连读开关
+    const chain = document.getElementById('blogChain');
+    if (chain) chain.onchange = () => { Store.data.settings.blogChain = chain.checked; Store.save(); };
+
+    // 博客朗读（连读则自动播下一个）
+    document.querySelectorAll('[data-blog]').forEach(b => {
       b.onclick = (e) => {
         e.stopPropagation();
         Speech.stop();
-        Speech.speak(b.dataset.blogAudio, { lang: b.dataset.lang, rate: 0.9, formal: false });
-        U.toast(b.dataset.lang === 'zh-HK' ? '正在用粤语朗读 🗣️' : '正在用普通话朗读 🗣️', 'ok');
+        const idx = Number(b.dataset.blog), lang = b.dataset.lang;
+        if (chainOn()) {
+          playBlogChain(idx, lang);
+          U.toast(lang === 'zh-HK' ? '连读中 · 粤语 🗣️' : '连读中 · 普通话 🗣️', 'ok');
+        } else {
+          Speech.speak(BLOGS[idx].text, { lang, rate: 0.9, formal: false });
+          U.toast(lang === 'zh-HK' ? '正在用粤语朗读 🗣️' : '正在用普通话朗读 🗣️', 'ok');
+        }
       };
     });
+
+    // 读完换下一期
+    const bd = document.getElementById('blogDone');
+    if (bd) bd.onclick = () => {
+      const i = blogCursor();
+      const done = blogDone();
+      if (!done.includes(i)) done.push(i);
+      d().blogCursor = (i + 1) % BLOGS.length;
+      Store.checkIn(KEY); Store.save(); App.refreshStreak();
+      render();
+      U.toast('已记录 ✓ 明天会推新的一期 🍉', 'ok');
+    };
   }
 
   function bindReader(p, segs, blocks) {

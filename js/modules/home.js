@@ -128,8 +128,7 @@ const HomeModule = (() => {
       cells += `
         <div class="cal-cell ${before ? 'disabled' : ''} ${has ? 'has' : ''}" ${before ? '' : `data-date="${ds}"`}>
           <span class="cal-d">${day}</span>
-          ${has ? `<span class="cal-tag">${items.slice(0, 2).join('·')}${items.length > 2 ? '…' : ''}</span>` : ''}
-          ${has ? '<span class="cal-check">✓</span>' : ''}
+          ${has ? `<span class="cal-num">${items.length}</span>` : ''}
         </div>`;
     }
 
@@ -148,7 +147,7 @@ const HomeModule = (() => {
         </div>
         <div class="cal-week">${cls.map(c => `<span>${c}</span>`).join('')}</div>
         <div class="cal-grid" id="calGrid">${cells}</div>
-        <div class="cal-tip">🟠 橙色方框 = 当天有完成的事项（如口语练习打卡、待办完成）。点方框看明细。</div>
+        <div class="cal-tip">🟢 绿色数字 = 当天完成的事项数量（如口语练习打卡、待办完成）。点格子看那天具体完成了什么。</div>
       </section>`;
   }
 

@@ -15,6 +15,7 @@ const Speech = (() => {
   let preferredEn = null;
   let preferredZh = null;
   let preferredZhFormal = null;      // 正规官方/四六级播音腔嗓音
+  let preferredYue = null;           // 粤语嗓音（Google 粤语 / 香港粤语等）
   let gen = 0;                       // 代际令牌，用来忽略被取消的旧朗读
 
   const NARRATION_RATE = 0.95;       // 中文朗读默认语速，更顺更自然
@@ -46,6 +47,10 @@ const Speech = (() => {
     preferredZhFormal = zh.find(v => likeZhFormal.some(k => v.name.includes(k)))
       || zh.find(v => /neural|online|broadcast|news/i.test(v.name))
       || preferredZh || zh[0] || null;
+
+    // 粤语：优先真正的粤语嗓音（lang 含 zh-HK / yue，或名字含「粤/廣東/广东/Cantonese」）
+    const yue = voices.filter(v => /zh-HK|yue|粤|廣東|广东|Cantonese/i.test(v.lang + ' ' + v.name));
+    preferredYue = yue[0] || null;
   }
 
   if (synth) {
@@ -54,6 +59,7 @@ const Speech = (() => {
   }
 
   function pickVoice(lang, formal) {
+    if (lang === 'zh-HK' || lang === 'yue' || lang === 'zh-yue') return preferredYue || preferredZh || preferredEn;
     if (!lang || /zh/.test(lang)) return (formal ? preferredZhFormal : preferredZh) || preferredEn;
     return preferredEn || preferredZh;
   }

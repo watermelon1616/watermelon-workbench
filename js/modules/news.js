@@ -1,16 +1,53 @@
 /* ==========================================================
    新闻热点 —— 财经新闻（小白向知识剖析） + 政治新闻（考公向）
+   · 每条都能朗读（连读开关）
+   · 未读的当天不更新；标记已读后第二天才换新的
+   · 日历点哪天，看那天标记已读的新闻，方便温习
    ========================================================== */
 
 const NewsModule = (() => {
   const KEY = 'news';
   let tab = 'finance';
+  let newsMonth = new Date();
 
   function d() { return Store.data.news; }
+  function readByDate() { if (!d().readByDate) d().readByDate = {}; return d().readByDate; }
+  function chainOn() { return !!Store.data.settings.newsChain; }
 
-  // 每天推送 3 条，同一天固定
-  function todayFinance() { return U.dayPick(NEWS_FINANCE, 3, 0); }
-  function todayPolitics() { return U.dayPick(NEWS_POLITICS, 3, 5); }
+  function srcOf(t) { return t === 'finance' ? NEWS_FINANCE : NEWS_POLITICS; }
+  function keyOf(t) { return t === 'finance' ? 'curFinance' : 'curPolitics'; }
+  function offsetOf(t) { return t === 'finance' ? 0 : 5; }
+
+  function nextId(src, curId) {
+    const i = src.findIndex(x => x.id === curId);
+    if (i < 0) return src[0].id;
+    return src[(i + 1) % src.length].id;
+  }
+
+  // 保证当天该 tab 的三条内容是固定的；已读的槽位在「新的一天」才换成新的
+  function ensureCurrent(t) {
+    const src = srcOf(t), key = keyOf(t);
+    if (!d()[key] || d()[key].length !== 3) {
+      d()[key] = U.dayPick(src, 3, offsetOf(t)).map(x => x.id);
+    }
+    if (d().lastRotate !== Store.today()) {
+      for (let i = 0; i < d()[key].length; i++) {
+        if (d().read.includes(d()[key][i])) d()[key][i] = nextId(src, d()[key][i]);
+      }
+      d().lastRotate = Store.today();
+      Store.save();
+    }
+  }
+
+  function curItems(t) {
+    ensureCurrent(t);
+    const src = srcOf(t);
+    return d()[keyOf(t)].map(id => src.find(x => x.id === id)).filter(Boolean);
+  }
+
+  function itemText(n) {
+    return `${n.title}。${n.summary}。知识点：${n.know.t}。${n.know.c}`;
+  }
 
   function render() {
     document.getElementById('view').innerHTML = `
@@ -19,7 +56,7 @@ const NewsModule = (() => {
           <h2 style="font-size:16px">📰 今日热点</h2>
           <span class="tag">${U.todayCN()}</span>
           <div class="spacer"></div>
-          <span class="sub">每天自动更新 · 已读 ${d().read.length} 条</span>
+          <label class="chain"><input type="checkbox" id="newsChain" ${chainOn() ? 'checked' : ''}> 连读（点一条连播当天三条）</label>
         </div>
         <div class="seg">
           <button data-tab="finance" class="${tab === 'finance' ? 'on' : ''}">💹 财经新闻</button>
@@ -28,6 +65,7 @@ const NewsModule = (() => {
         </div>
       </section>
       ${tab === 'finance' ? renderFinance() : tab === 'politics' ? renderPolitics() : renderPhrases()}
+      ${renderCalendar()}
       <section class="card fade-in" style="background:linear-gradient(120deg,#FFF6DC,#FFF0F1)">
         <div style="font-size:13px;color:#7C7566;line-height:1.85">
           <b style="font-size:15px;color:#3D392F">🍉 阅读记录</b><br>
@@ -43,7 +81,7 @@ const NewsModule = (() => {
 
   // ---------- 财经 ----------
   function renderFinance() {
-    const list = todayFinance();
+    const list = curItems('finance');
     return `
       <section class="card fade-in">
         <div class="card-head">
@@ -53,25 +91,7 @@ const NewsModule = (() => {
         <div style="font-size:12.5px;color:#7C7566;margin-bottom:16px;line-height:1.75">
           你现在是小白，所以每条新闻下面我都拆了一个「<b>知识点</b>」——不是解释新闻本身，而是解释<b>新闻背后那个反复出现的原理</b>。原理只有几十个，新闻却有无数条。把原理吃透，以后看什么都通。
         </div>
-        ${list.map(n => `
-          <div class="news-item">
-            <div class="ni-top">
-              <span class="tag">${n.tag}</span>
-              ${d().read.includes(n.id) ? '<span class="tag green">已读 ✓</span>' : ''}
-              <div class="spacer"></div>
-              <button class="btn sm" data-read="${n.id}">${d().read.includes(n.id) ? '已标记' : '标记已读'}</button>
-            </div>
-            <div class="ni-title">${U.esc(n.title)}</div>
-            <div class="ni-sum">${U.esc(n.summary)}</div>
-            <div class="kbox">
-              <div class="kbox-t">💡 知识点剖析 · ${U.esc(n.know.t)}</div>
-              <div class="kbox-c">${n.know.c}</div>
-            </div>
-            <div class="row" style="margin-top:11px">
-              <span style="font-size:11.5px;color:#ADA492">关键词：</span>
-              ${n.terms.map(t => `<span class="tag grey">${U.esc(t)}</span>`).join('')}
-            </div>
-          </div>`).join('')}
+        ${list.map((n, idx) => renderNewsItem(n, idx)).join('')}
         <div class="kbox green" style="margin-top:6px">
           <div class="kbox-t">🍉 给小白的学习路线（按顺序来，别跳）</div>
           <div class="kbox-c">
@@ -87,7 +107,7 @@ const NewsModule = (() => {
 
   // ---------- 政治 ----------
   function renderPolitics() {
-    const list = todayPolitics();
+    const list = curItems('politics');
     return `
       <section class="card fade-in">
         <div class="card-head">
@@ -97,37 +117,32 @@ const NewsModule = (() => {
         <div style="font-size:12.5px;color:#7C7566;margin-bottom:16px;line-height:1.75">
           每条时事都配了<b>答题框架</b>和<b>可直接背的句子</b>。申论和面试的本质是「用规范的话把道理讲清楚」，<b>框架比辞藻重要</b>。
         </div>
-        ${list.map(n => `
-          <div class="news-item pol">
-            <div class="ni-top">
-              <span class="tag red">${n.tag}</span>
-              ${d().read.includes(n.id) ? '<span class="tag green">已读 ✓</span>' : ''}
-              <div class="spacer"></div>
-              <button class="btn sm" data-read="${n.id}">${d().read.includes(n.id) ? '已标记' : '标记已读'}</button>
-            </div>
-            <div class="ni-title">${U.esc(n.title)}</div>
-            <div class="ni-sum">${U.esc(n.summary)}</div>
-            <div class="kbox">
-              <div class="kbox-t">🎯 ${U.esc(n.know.t)}</div>
-              <div class="kbox-c">${n.know.c}</div>
-            </div>
-            <div class="row" style="margin-top:12px;margin-bottom:10px">
-              <span style="font-size:11.5px;color:#ADA492">高频词：</span>
-              ${n.words.map(w => `<span class="tag">${U.esc(w)}</span>`).join('')}
-            </div>
-            <div class="phrase-grid">
-              ${n.sentences.map(s => `
-                <div class="phrase">
-                  <button class="ph-copy" data-copy="${U.esc(s.s)}">复制</button>
-                  <div class="ph-main">${U.esc(s.s)}</div>
-                  <div class="ph-note">💡 ${U.esc(s.n)}</div>
-                  <button class="btn sm" data-fav="${U.esc(s.s)}" style="margin-top:9px;padding:4px 10px;font-size:11.5px">
-                    ${d().favPhrases.includes(s.s) ? '★ 已收藏' : '☆ 收藏'}
-                  </button>
-                </div>`).join('')}
-            </div>
-          </div>`).join('')}
+        ${list.map((n, idx) => renderNewsItem(n, idx, true)).join('')}
       </section>`;
+  }
+
+  function renderNewsItem(n, idx, isPol) {
+    const read = d().read.includes(n.id);
+    return `
+      <div class="news-item ${isPol ? 'pol' : ''}">
+        <div class="ni-top">
+          <span class="tag ${isPol ? 'red' : ''}">${n.tag}</span>
+          ${read ? '<span class="tag green">已读 ✓</span>' : ''}
+          <div class="spacer"></div>
+          <button class="btn sm" data-listen="${idx}" title="朗读这条新闻">🔊 朗读</button>
+          <button class="btn sm" data-read="${n.id}">${read ? '已标记' : '标记已读'}</button>
+        </div>
+        <div class="ni-title">${U.esc(n.title)}</div>
+        <div class="ni-sum">${U.esc(n.summary)}</div>
+        <div class="kbox">
+          <div class="kbox-t">💡 知识点剖析 · ${U.esc(n.know.t)}</div>
+          <div class="kbox-c">${n.know.c}</div>
+        </div>
+        <div class="row" style="margin-top:11px">
+          <span style="font-size:11.5px;color:#ADA492">关键词：</span>
+          ${n.terms.map(t => `<span class="tag grey">${U.esc(t)}</span>`).join('')}
+        </div>
+      </div>`;
   }
 
   // ---------- 好词好句 ----------
@@ -181,16 +196,101 @@ const NewsModule = (() => {
       </section>`;
   }
 
+  // ---------- 日历温习 ----------
+  function renderCalendar() {
+    const y = newsMonth.getFullYear(), mo = newsMonth.getMonth();
+    const first = new Date(y, mo, 1).getDay();
+    const days = new Date(y, mo + 1, 0).getDate();
+    const cls = ['日', '一', '二', '三', '四', '五', '六'];
+    const rbd = readByDate();
+
+    let cells = '';
+    for (let i = 0; i < first; i++) cells += `<div class="cal-cell empty"></div>`;
+    for (let day = 1; day <= days; day++) {
+      const ds = `${y}-${String(mo + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const ids = rbd[ds] || [];
+      const n = ids.length;
+      cells += `
+        <div class="cal-cell ${n ? 'has' : ''}" ${n ? `data-date="${ds}"` : ''}>
+          <span class="cal-d">${day}</span>
+          ${n ? `<span class="cal-num">${n}</span>` : ''}
+        </div>`;
+    }
+    return `
+      <section class="card fade-in" style="margin-top:18px">
+        <div class="card-head">
+          <h2>📅 新闻日历</h2>
+          <span class="tag">点带绿字的天，温习那天已读的新闻</span>
+          <div class="spacer"></div>
+          <div class="cal-nav">
+            <button id="newsPrev">‹</button>
+            <span>${y} 年 ${mo + 1} 月</span>
+            <button id="newsNext">›</button>
+          </div>
+        </div>
+        <div class="cal-week">${cls.map(c => `<span>${c}</span>`).join('')}</div>
+        <div class="cal-grid">${cells}</div>
+        <div class="cal-tip">🟢 绿字 = 那天你标记已读的新闻条数。点格子回看内容温习。</div>
+      </section>`;
+  }
+
+  function showDayNews(ds) {
+    const ids = readByDate()[ds] || [];
+    const all = NEWS_FINANCE.concat(NEWS_POLITICS);
+    const items = ids.map(id => all.find(x => x.id === id)).filter(Boolean);
+    const root = document.getElementById('modalRoot');
+    const body = items.length ? items.map(n => `
+      <div class="news-item" style="margin-bottom:12px">
+        <div class="ni-title">${U.esc(n.title)}</div>
+        <div class="ni-sum">${U.esc(n.summary)}</div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn sm" data-say="${U.esc(itemText(n))}">🔊 朗读</button>
+        </div>
+      </div>`).join('') : '这一天没有已读记录。';
+    root.innerHTML = `<div class="modal-mask"><div class="modal" style="max-width:600px">
+      <h3>📰 ${ds.slice(5).replace('-', '月')}日 已读新闻</h3>
+      <div class="m-sub">共 ${items.length} 条 · 点空白处关闭</div>
+      <div style="max-height:62vh;overflow:auto;margin-top:12px">${body}</div>
+    </div></div>`;
+    root.querySelector('.modal-mask').onclick = (e) => { if (e.target.classList.contains('modal-mask')) root.innerHTML = ''; };
+    root.querySelectorAll('[data-say]').forEach(b => { b.onclick = (e) => { e.stopPropagation(); Speech.speak(b.dataset.say, { lang: 'zh-CN' }); }; });
+  }
+
   // ---------- 交互 ----------
   function bind() {
     document.querySelectorAll('[data-tab]').forEach(b => {
       b.onclick = () => { tab = b.dataset.tab; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
     });
 
+    const chain = document.getElementById('newsChain');
+    if (chain) chain.onchange = () => { Store.data.settings.newsChain = chain.checked; Store.save(); };
+
+    document.querySelectorAll('[data-listen]').forEach(b => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        Speech.stop();
+        const list = curItems(tab);
+        const start = Number(b.dataset.listen);
+        if (chainOn()) {
+          const queue = [];
+          for (let k = 0; k < list.length; k++) queue.push({ text: itemText(list[(start + k) % list.length]), lang: 'zh-CN' });
+          Speech.speakQueue(queue, { rate: 0.95, formal: true });
+          U.toast('连读中 · 当天三条依次播放 📰', 'ok');
+        } else {
+          Speech.speak(itemText(list[start]), { lang: 'zh-CN', rate: 0.95, formal: true });
+        }
+      };
+    });
+
     document.querySelectorAll('[data-read]').forEach(b => {
       b.onclick = () => {
         const id = b.dataset.read;
-        if (!d().read.includes(id)) d().read.push(id);
+        if (!d().read.includes(id)) {
+          d().read.push(id);
+          const ds = Store.today();
+          const rbd = readByDate();
+          (rbd[ds] = rbd[ds] || []).push(id);
+        }
         Store.checkIn(KEY); Store.save(); App.refreshStreak(); render();
         U.toast('已读 ✓ 知识又进账一点 🍉', 'ok');
       };
@@ -216,6 +316,13 @@ const NewsModule = (() => {
         if (i >= 0) d().favPhrases.splice(i, 1);
         Store.save(); render();
       };
+    });
+
+    const prev = document.getElementById('newsPrev'), next = document.getElementById('newsNext');
+    if (prev) prev.onclick = () => { newsMonth = new Date(newsMonth.getFullYear(), newsMonth.getMonth() - 1, 1); render(); };
+    if (next) next.onclick = () => { newsMonth = new Date(newsMonth.getFullYear(), newsMonth.getMonth() + 1, 1); render(); };
+    document.querySelectorAll('.cal-cell[data-date]').forEach(cell => {
+      cell.onclick = () => showDayNews(cell.dataset.date);
     });
   }
 
