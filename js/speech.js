@@ -79,14 +79,30 @@ const Speech = (() => {
 
   let current = null;
 
+  // ---------- 浮层「停止朗读」按钮（随时可停） ----------
+  let stopBtn = null;
+  function ensureStopBtn() {
+    if (stopBtn) return stopBtn;
+    const b = document.createElement('button');
+    b.id = 'speechStop';
+    b.className = 'speech-stop';
+    b.innerHTML = '⏹ 停止朗读';
+    b.onclick = () => { stop(); U.toast('已停止朗读', 'warn'); };
+    document.body.appendChild(b);
+    stopBtn = b;
+    return b;
+  }
+  function showStop() { ensureStopBtn().classList.add('show'); }
+  function hideStop() { if (stopBtn) stopBtn.classList.remove('show'); }
+
   /** 朗读一段（口语跟读、单词卡片用） */
   function speak(text, opt = {}) {
     if (!synth) { U.toast('这个浏览器不支持朗读，建议用 Chrome 或 Edge', 'warn'); return; }
     stop();
     const u = buildUtterance(text, opt);
-    u.onstart = () => opt.onStart && opt.onStart();
-    u.onend = () => { current = null; opt.onEnd && opt.onEnd(); };
-    u.onerror = () => { current = null; opt.onEnd && opt.onEnd(); };
+    u.onstart = () => { showStop(); opt.onStart && opt.onStart(); };
+    u.onend = () => { current = null; hideStop(); opt.onEnd && opt.onEnd(); };
+    u.onerror = () => { current = null; hideStop(); opt.onEnd && opt.onEnd(); };
     current = u;
     synth.speak(u);
   }
@@ -99,7 +115,7 @@ const Speech = (() => {
     const myGen = ++gen;
     const next = () => {
       if (myGen !== gen) return;          // 已被取消
-      if (i >= lines.length) { opt.onAll && opt.onAll(); return; }
+      if (i >= lines.length) { hideStop(); opt.onAll && opt.onAll(); return; }
       const item = lines[i];
       const text = typeof item === 'string' ? item : item.text;
       const u = buildUtterance(text, opt);
@@ -122,6 +138,8 @@ const Speech = (() => {
   function stop() {
     if (synth) { gen++; synth.cancel(); }   // 代际 +1，旧的 onend 全部失效
     current = null;
+    hideStop();
+    window.dispatchEvent(new Event('speech-stop'));   // 让录音带播放器同步停止
   }
 
   function speaking() { return synth ? synth.speaking : false; }
@@ -254,6 +272,8 @@ const Speech = (() => {
   // ==========================================================
   function makeCassette(opts) {
     const tape = Tape.create();
+    const onStopReq = () => tape.stop();
+    window.addEventListener('speech-stop', onStopReq);
     const wrap = U.el('div', 'cassette');
     wrap.innerHTML = `
       <div class="cass-visual">
@@ -360,6 +380,7 @@ const Speech = (() => {
 
     function destroy() {
       tape.stop();
+      window.removeEventListener('speech-stop', onStopReq);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     }
