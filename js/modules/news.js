@@ -130,6 +130,7 @@ const NewsModule = (() => {
           ${read ? '<span class="tag green">已读 ✓</span>' : ''}
           <div class="spacer"></div>
           <button class="btn sm" data-listen="${idx}" title="朗读这条新闻">🔊 朗读</button>
+          <button class="btn sm stop-btn" data-stop>■ 停</button>
           <button class="btn sm" data-read="${n.id}">${read ? '已标记' : '标记已读'}</button>
         </div>
         <div class="ni-title">${U.esc(n.title)}</div>
