@@ -48,7 +48,7 @@ const Store = (() => {
         ledger: []
       },
 
-      speaking: { done: {}, records: {}, favWords: [] },
+      speaking: { done: {}, records: {}, history: {}, favWords: [] },
       listening: { progress: {}, answers: {} },
       podcast: { listened: [], notes: {} },
       news: { read: [], favPhrases: [], notes: {} },
