@@ -174,6 +174,14 @@ const App = (() => {
     if (mask) mask.onclick = () => closeDrawer();
   }
 
+  // ---------- 全局「停止朗读」按钮（TTS 旁都有 data-stop，这里统一处理） ----------
+  function bindGlobalStop() {
+    document.addEventListener('click', (e) => {
+      const s = e.target.closest('[data-stop]');
+      if (s) { e.stopPropagation(); Speech.stop(); U.toast('已停止朗读', 'warn'); }
+    });
+  }
+
   // ---------- 应用内「安装到主屏幕」 ----------
   let deferredPrompt = null;
   function bindInstall() {
@@ -239,6 +247,7 @@ const App = (() => {
     bindFooter();
     bindDrawer();
     bindInstall();
+    bindGlobalStop();
     paint();
 
     // 每天第一次打开时的问候
