@@ -42,6 +42,41 @@ const PodcastModule = (() => {
 
   let cat = 'all';
   let reading = null;
+  let _picks = [];   // 当天 3 个主题推荐（供绑定用）
+
+  // 深度主题（每日 3 个不同主题，避开无脑内容）
+  const THEMES = [
+    { key: 'logic',   label: '逻辑思维', emoji: '🧠', match: /社会与文化|新闻|哲学|宗教|政府|文化|社会|政治/ },
+    { key: 'finance', label: '财经知识', emoji: '📈', match: /商业|投资|经济|财经|金融|理财|创业/ },
+    { key: 'science', label: '知识科普', emoji: '🔬', match: /科学|科技|技术|自然|历史|教育|健康|医学|天文|地理|读书/ },
+    { key: 'debate',  label: '思辨辩论', emoji: '⚖️', match: /新闻|社会与文化|政府|政治|社会|文化|评论/ }
+  ];
+  function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+
+  // 每天 3 个不同主题，按日期稳定、次日轮换
+  function dailyPicks() {
+    const p = pool();
+    if (!p.length) return [];
+    const buckets = THEMES.map(t => ({ ...t, items: p.filter(x => x.genre && t.match.test(x.genre)) }));
+    const dayStr = Store.today();
+    const drop = hashStr(dayStr) % THEMES.length;          // 4 选 3，每天轮换掉一个
+    const chosen = THEMES.filter((_, i) => i !== drop);
+    const picks = [];
+    chosen.forEach(th => {
+      const b = buckets.find(x => x.key === th.key);
+      const arr = (b && b.items.length) ? b.items : p;
+      const idx = hashStr(dayStr + th.key) % arr.length;
+      picks.push({ theme: th, pod: arr[idx] });
+    });
+    // 主题没人则补其它池，凑满 3 个
+    let guard = 0;
+    while (picks.length < 3 && guard++ < 20) {
+      const rest = p.filter(x => !picks.some(pk => pk.pod && pk.pod.id === x.id));
+      if (!rest.length) break;
+      picks.push({ theme: null, pod: rest[hashStr(dayStr + picks.length) % rest.length] });
+    }
+    return picks;
+  }
 
   // 实时榜（由 GitHub Action 每日刷新）
   let LIVE = null;
@@ -85,7 +120,7 @@ const PodcastModule = (() => {
       name: b.title,
       artist: b.author,
       genre: b.tag,
-      url: 'https://www.ximalaya.com/search/' + encodeURIComponent(b.title),
+      url: 'https://www.xiaoyuzhoufm.com/search?q=' + encodeURIComponent(b.title),
       art: null,
       episode: null,
       summary: b.summary,
@@ -203,73 +238,79 @@ const PodcastModule = (() => {
       </div>`;
   }
 
-  // ---------- 今日推荐播客（实时榜 + 读完才换下一期 + 连读） ----------
+  // ---------- 今日推荐播客（每天 3 个深度主题，读完才换下一期） ----------
   function renderBlogs() {
-    const p = pool();
-    const cur = curBlog();
-    if (!cur) {
+    _picks = dailyPicks();
+    const done = doneIds();
+    const allDone = _picks.length && _picks.every(pk => pk.pod && done.includes(pk.pod.id));
+    if (allDone) {
       return `
       <section class="card fade-in" style="margin-top:18px;background:linear-gradient(125deg,#EAFBF1,#FFF7E0);border:none">
         <div class="card-head"><h2>🎙️ 今日推荐播客</h2><div class="spacer"></div><span class="tag green">今日已听完</span></div>
         <div style="padding:10px 4px;font-size:14px;color:#5b6b5b;line-height:1.8">
-          🍉 今天的优质播客都听完啦，明天 06:00 会刷新新的一期～<br>
+          🍉 今天的 3 期深度播客都听完啦，明天会换新的 3 个主题～<br>
           <span style="color:#9aa89a">数据来源：Apple Podcasts 每日热门榜</span>
         </div>
       </section>`;
     }
-    const idx = p.findIndex(x => x.id === cur.id);
-    const done = doneIds().includes(cur.id);
-    const xmly = 'https://www.ximalaya.com/search/' + encodeURIComponent(cur.name);
-    const xyyz = 'https://www.xiaoyuzhoufm.com/search?q=' + encodeURIComponent(cur.name);
-    const apple = cur.url || xmly;
+    const cards = _picks.map((pk, i) => {
+      const cur = pk.pod;
+      if (!cur) return '';
+      const isDone = done.includes(cur.id);
+      const apple = cur.url || 'https://www.apple.com/apple-podcasts/';
+      const xyyz = 'https://www.xiaoyuzhoufm.com/search?q=' + encodeURIComponent(cur.name);
+      const themeLabel = pk.theme ? pk.theme.emoji + ' ' + pk.theme.label : '🍉 今日精选';
+      return `
+        <div class="blog-item" style="border:2px solid ${isDone ? '#3FAE7B' : '#FFD9A8'};margin-bottom:14px">
+          <div class="blog-head">
+            <span class="blog-tier">${themeLabel}</span>
+            <span class="blog-title">${U.esc(cur.name)}</span>
+            ${isDone ? '<span class="tag green" style="margin-left:8px">已听完 ✓</span>' : ''}
+          </div>
+          <div class="blog-meta">${U.esc(cur.artist)} · ${U.esc(cur.genre)}</div>
+          ${cur.episode ? `<div class="blog-sum"><b>🎧 最新单集：</b>${U.esc(cur.episode)}</div>` : ''}
+          <div class="blog-sum">${U.esc(cur.summary || ('「' + cur.name + '」由 ' + cur.artist + ' 出品，分类：' + cur.genre + '。'))}</div>
+          <div class="blog-ops">
+            <button class="btn sm" data-blog="cn" data-pick="${i}">🗣️ 普通话朗读</button>
+            <button class="btn sm stop-btn" data-stop>■ 停</button>
+            <a class="btn sm ghost" href="${apple}" target="_blank" rel="noopener">🍎 Apple 收听</a>
+            <a class="btn sm ghost" href="${xyyz}" target="_blank" rel="noopener">🟢 小宇宙</a>
+            <button class="btn sm ${isDone ? '' : 'green'}" data-blog-done="${i}">${isDone ? '已听完' : '我听完了，换下一期'}</button>
+          </div>
+        </div>`;
+    }).join('');
     return `
       <section class="card fade-in" style="margin-top:18px;background:linear-gradient(125deg,#FFF3E0,#FDEBF2);border:none">
         <div class="card-head">
           <h2>🎙️ 今日推荐播客</h2>
-          <span class="tag red">${cur.tier}</span>
+          <span class="tag red">每天 3 个深度主题</span>
           <div class="spacer"></div>
-          <label class="chain"><input type="checkbox" id="blogChain" ${chainOn() ? 'checked' : ''}> 连读（听完自动播下一个）</label>
+          <label class="chain"><input type="checkbox" id="blogChain" ${chainOn() ? 'checked' : ''}> 连读（依次播完 3 期）</label>
         </div>
-        <div class="blog-list">
-          <div class="blog-item" style="border:2px solid ${done ? '#3FAE7B' : '#FFD9A8'}">
-            <div class="blog-head">
-              <span class="blog-tier ${cur.tier === '头部热门' ? 'hot' : ''}">${cur.tier}</span>
-              <span class="blog-title">${U.esc(cur.name)}</span>
-              ${done ? '<span class="tag green" style="margin-left:8px">本期已听完 ✓</span>' : ''}
-            </div>
-            <div class="blog-meta">${U.esc(cur.artist)} · ${U.esc(cur.genre)} · 第 ${idx + 1} / ${p.length} 期</div>
-            ${cur.episode ? `<div class="blog-sum"><b>🎧 最新单集：</b>${U.esc(cur.episode)}</div>` : ''}
-            <div class="blog-sum">${U.esc(cur.summary || ('「' + cur.name + '」由 ' + cur.artist + ' 出品，分类：' + cur.genre + '。'))}</div>
-            <div class="blog-ops">
-              <button class="btn sm" data-blog="hk">🗣️ 粤语朗读</button>
-              <button class="btn sm" data-blog="cn">🗣️ 普通话朗读</button>
-              <a class="btn sm ghost" href="${apple}" target="_blank" rel="noopener">🍎 Apple 收听</a>
-              <a class="btn sm ghost" href="${xyyz}" target="_blank" rel="noopener">🟢 小宇宙</a>
-              <a class="btn sm ghost" href="${xmly}" target="_blank" rel="noopener">📻 喜马拉雅</a>
-              <button class="btn sm ${done ? '' : 'green'}" id="blogDone">${done ? '已听完' : '我听完了，换下一期'}</button>
-            </div>
-          </div>
-        </div>
-        <div class="cal-tip">🟢 没听完不会换内容；点「我听完了」后第二天才会推新的一期。数据来自 Apple Podcasts 每日热门榜，每天 06:00 自动刷新。朗读用系统嗓音，部分设备无粤语嗓音会自动用普通话。</div>
+        <div class="blog-list">${cards}</div>
+        <div class="cal-tip">🟢 三个主题每天轮换（逻辑思维 / 财经 / 科普 / 思辨）。没听完不会换；点「我听完了」后第二天才会推新的 3 期。数据来自 Apple Podcasts 每日热门榜，每天 06:00 自动刷新。</div>
       </section>`;
   }
 
-  // 连读：读完当前 -> 标记 -> 自动播下一个
-  function playCurrentChain(lang) {
-    const cur = curBlog();
-    if (!cur) { U.toast('今天都听完啦，明天有新推荐 🍉', 'ok'); return; }
-    U.toast(lang === 'zh-HK' ? '连读中 · 粤语 🗣️' : '连读中 · 普通话 🗣️', 'ok');
-    Speech.speak(cur.summaryText, {
-      lang, rate: 0.92, formal: false,
-      onEnd: () => {
-        markBlogDone(cur.id);
-        if (chainOn()) {
-          const nxt = curBlog();
-          if (nxt && nxt.id !== cur.id) { playCurrentChain(lang); return; }
-          render(); U.toast('今天的推荐都听完啦 🍉', 'ok');
-        } else { render(); }
-      }
-    });
+  // 连读：依次播完当天未听的 3 期（普通话）
+  function playCurrentChain() {
+    const remaining = _picks.filter(pk => pk.pod && !doneIds().includes(pk.pod.id));
+    if (!remaining.length) { U.toast('今天都听完啦，明天有新推荐 🍉', 'ok'); return; }
+    let k = 0;
+    U.toast('连读中 · 普通话 🗣️', 'ok');
+    const step = () => {
+      if (k >= remaining.length) { render(); U.toast('今天的推荐都听完啦 🍉', 'ok'); return; }
+      const cur = remaining[k].pod; k++;
+      Speech.speak(cur.summaryText, {
+        lang: 'zh-CN', rate: 0.92, formal: false,
+        onEnd: () => {
+          markBlogDone(cur.id);
+          if (chainOn()) step();
+          else { render(); }
+        }
+      });
+    };
+    step();
   }
 
   // ---------- 阅读器 ----------
@@ -353,24 +394,26 @@ const PodcastModule = (() => {
       b.onclick = (e) => {
         e.stopPropagation();
         Speech.stop();
-        const cur = curBlog();
+        const i = Number(b.dataset.pick);
+        const cur = _picks[i] && _picks[i].pod;
         if (!cur) return;
-        const lang = b.dataset.blog === 'hk' ? 'zh-HK' : 'zh-CN';
-        if (chainOn()) playCurrentChain(lang);
+        if (chainOn()) playCurrentChain();
         else {
-          Speech.speak(cur.summaryText, { lang, rate: 0.92, formal: false });
-          U.toast(lang === 'zh-HK' ? '正在用粤语朗读 🗣️' : '正在用普通话朗读 🗣️', 'ok');
+          Speech.speak(cur.summaryText, { lang: 'zh-CN', rate: 0.92, formal: false });
+          U.toast('正在用普通话朗读 🗣️', 'ok');
         }
       };
     });
 
-    const bd = document.getElementById('blogDone');
-    if (bd) bd.onclick = () => {
-      const cur = curBlog();
-      if (cur) markBlogDone(cur.id);
-      render();
-      U.toast('已记录 ✓ 明天会推新的一期 🍉', 'ok');
-    };
+    document.querySelectorAll('[data-blog-done]').forEach(b => {
+      b.onclick = () => {
+        const i = Number(b.dataset.blogDone);
+        const cur = _picks[i] && _picks[i].pod;
+        if (cur) markBlogDone(cur.id);
+        render();
+        U.toast('已记录 ✓ 明天会推新的一期 🍉', 'ok');
+      };
+    });
   }
 
   function bindReader(p, segs, blocks) {
