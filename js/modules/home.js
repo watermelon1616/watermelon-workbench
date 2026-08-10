@@ -21,6 +21,7 @@ const HomeModule = (() => {
   ];
 
   let calMonth = new Date(2026, 7, 1); // 默认 2026-08
+  let rvMonth = new Date();            // 复盘日历当前月
 
   function d() { return Store.data; }
   function T() { return Store.today(); }
@@ -198,6 +199,16 @@ const HomeModule = (() => {
         <div class="row" style="margin-top:10px;justify-content:flex-end">
           <button class="btn primary" id="saveReview">保存今日复盘</button>
         </div>
+        <div class="rv-cal" id="rvCal" style="margin-top:14px">
+          <div class="cal-nav">
+            <button id="rvPrev">‹</button>
+            <span>${rvMonth.getFullYear()} 年 ${rvMonth.getMonth() + 1} 月</span>
+            <button id="rvNext">›</button>
+          </div>
+          <div class="cal-week">${['日', '一', '二', '三', '四', '五', '六'].map(c => `<span>${c}</span>`).join('')}</div>
+          <div class="cal-grid">${reviewCells()}</div>
+        </div>
+        <div class="cal-tip">🟢 点某一天，查看 / 编辑那天写的复盘，随时温习。</div>
       </section>
 
       <section class="card fade-in" style="margin-top:18px">
@@ -251,6 +262,13 @@ const HomeModule = (() => {
       U.toast('今日复盘已保存到电脑 ✓', 'ok');
       render();
     };
+    // 复盘日历翻月 + 点天
+    const rvPrev = document.getElementById('rvPrev'), rvNext = document.getElementById('rvNext');
+    if (rvPrev) rvPrev.onclick = () => { rvMonth = new Date(rvMonth.getFullYear(), rvMonth.getMonth() - 1, 1); render(); };
+    if (rvNext) rvNext.onclick = () => { rvMonth = new Date(rvMonth.getFullYear(), rvMonth.getMonth() + 1, 1); render(); };
+    document.querySelectorAll('#rvCal .cal-cell[data-date]').forEach(cell => {
+      cell.onclick = () => openReviewDay(cell.dataset.date);
+    });
     // 查看历史复盘
     document.querySelectorAll('[data-review]').forEach(it => {
       it.onclick = () => {
@@ -273,6 +291,32 @@ const HomeModule = (() => {
       title: `${ds.slice(5).replace('-', '月')}日 的完成情况`,
       sub: items.length ? items.map(i => '· ' + i).join('\n') : '这一天还没有记录任何完成事项。',
       okText: '知道了'
+    });
+  }
+
+  // ---------- 复盘日历（点任一天查看 / 编辑那天复盘） ----------
+  function reviewCells() {
+    const y = rvMonth.getFullYear(), mo = rvMonth.getMonth();
+    const first = new Date(y, mo, 1).getDay();
+    const days = new Date(y, mo + 1, 0).getDate();
+    let cells = '';
+    for (let i = 0; i < first; i++) cells += '<div class="cal-cell empty"></div>';
+    for (let day = 1; day <= days; day++) {
+      const ds = `${y}-${String(mo + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const has = !!(Store.getReview(ds) || '').trim();
+      cells += `<div class="cal-cell ${has ? 'has' : ''}" data-date="${ds}"><span class="cal-d">${day}</span>${has ? '<span class="cal-num">✎</span>' : ''}</div>`;
+    }
+    return cells;
+  }
+
+  function openReviewDay(ds) {
+    U.prompt({
+      title: `复盘 · ${ds.slice(5).replace('-', '月')}日`,
+      sub: '可修改后保存',
+      value: Store.getReview(ds),
+      placeholder: '写下你那天的复盘…',
+      okText: '保存',
+      onOk: (v) => { Store.setReview(ds, v); U.toast('已更新 ✓', 'ok'); render(); }
     });
   }
 
