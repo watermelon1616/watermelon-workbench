@@ -17,6 +17,7 @@ const SpeakingModule = (() => {
 
   // 指定日期的批次（首次访问该天才生成，之后一直保留 → 没读完也不会丢）
   function ensureBatch(type, dateStr) {
+    if (!d().history) d().history = {};
     const h = d().history[type] || (d().history[type] = {});
     if (!h[dateStr]) {
       const p = SPEAKING_CORPUS[type];
@@ -118,6 +119,7 @@ const SpeakingModule = (() => {
           <span class="tag green">点 ✅ 打勾 · 点卡片听读音</span>
           <div class="spacer"></div>
           <button class="btn sm" id="readWords">🔊 连读一遍</button>
+          <button class="btn sm stop-btn" data-stop>■ 停</button>
         </div>
         <div class="word-grid">
           ${batch.words.map((w, i) => `
@@ -137,6 +139,7 @@ const SpeakingModule = (() => {
           <span class="tag red">背下来直接能用</span>
           <div class="spacer"></div>
           <button class="btn sm" id="readSents">🔊 连读一遍</button>
+          <button class="btn sm stop-btn" data-stop>■ 停</button>
         </div>
         ${batch.sentences.map((s, i) => `
           <div class="sent-item ${s.learned ? 'done' : ''}" style="border-left-color:${p.color}">
