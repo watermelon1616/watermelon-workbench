@@ -87,6 +87,7 @@ const App = (() => {
       Store.exportFile();
       U.toast('备份文件已下载 📦', 'ok');
     };
+    // 覆盖导入
     const fi = document.getElementById('fileImport');
     document.getElementById('btnImport').onclick = () => fi.click();
     fi.onchange = () => {
@@ -101,6 +102,23 @@ const App = (() => {
         })
       });
       fi.value = '';
+    };
+    // 合并导入（不覆盖现有数据，重复项去重）
+    const fm = document.getElementById('fileMerge');
+    document.getElementById('btnMerge').onclick = () => fm.click();
+    fm.onchange = () => {
+      const f = fm.files[0];
+      if (!f) return;
+      U.confirm({
+        title: '合并导入（不覆盖现有数据）',
+        sub: '会把备份里的数据合并进来，与现有数据拼成完整一份；重复项自动去重，现有数据不会丢。',
+        okText: '合并导入',
+        onOk: () => Store.importFile(f, (ok, err) => {
+          if (ok) { U.toast('已合并导入，正在刷新…', 'ok'); setTimeout(() => location.reload(), 700); }
+          else U.toast('导入失败：' + err, 'err');
+        }, 'merge')
+      });
+      fm.value = '';
     };
   }
 
