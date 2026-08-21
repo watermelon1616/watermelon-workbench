@@ -141,7 +141,7 @@ const NewsModule = (() => {
         </div>
         <div class="row" style="margin-top:11px">
           <span style="font-size:11.5px;color:#ADA492">关键词：</span>
-          ${n.terms.map(t => `<span class="tag grey">${U.esc(t)}</span>`).join('')}
+          ${(n.terms || n.words || []).map(t => `<span class="tag grey">${U.esc(t)}</span>`).join('')}
         </div>
       </div>`;
   }
