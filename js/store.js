@@ -142,6 +142,11 @@ const Store = (() => {
     data.__savedAt = nowISO();
     try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch (e) { console.warn('本地存储写入失败', e); }
 
+    // 云端同步（方案③）：已配置并登录则把整份快照异步推到 Supabase（最后写入为准）
+    if (window.Sync && Sync.isConfigured() && Sync.isSignedIn()) {
+      Sync.push(data).catch(() => {});
+    }
+
     // 云端版 / 无本地服务：localStorage 就是正式存储，这是正常状态不是异常
     if (!hasServer) {
       const t = new Date();
@@ -332,6 +337,12 @@ const Store = (() => {
     rd.readAsText(file);
   }
 
+  /** 用远程数据整体替换本地（云端同步拉取后调用，最后写入为准） */
+  function setData(obj) {
+    data = merge(defaults(), obj || {});
+    save();
+  }
+
   return {
     get data() { return data; },
     get hasServer() { return hasServer; },
@@ -339,6 +350,6 @@ const Store = (() => {
     checkIn, streak, bestStreak, checkedToday, totalDays,
     toggleCheckIn, addMinutes, getMinutes, setReview, getReview,
     getAI, setAI, hasAI,
-    exportFile, importFile
+    exportFile, importFile, setData
   };
 })();
