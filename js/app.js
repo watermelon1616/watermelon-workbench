@@ -309,10 +309,10 @@ const App = (() => {
             <summary>如何获取 Supabase 配置 / 建表？</summary>
             <ol>
               <li>supabase.com 建免费项目</li>
-              <li>Authentication → Providers → Email，确认开启；默认即支持 OTP（6~8 位数字）和魔法链接</li>
+              <li>Authentication → Sign In / Up → Email（或 Providers → Email），<b>关闭 Confirm email</b>，确保发送的是 6~8 位数字验证码（部分邮箱会提前点掉魔法链接，导致登录失败）</li>
+              <li>Authentication → URL Configuration：Site URL 改成你的工作台地址；Redirect URLs 添加一条 <code>https://watermelon1616.github.io/watermelon-workbench/**</code></li>
               <li>SQL Editor 粘贴下面语句执行（建表 + 权限）</li>
               <li>Project Settings → API 复制 Project URL 与 anon public key 填上方</li>
-              <li>Authentication → URL Configuration → Site URL 改成你的云端版地址，否则邮件链接会跳错页面</li>
             </ol>
             <pre class="set-sql">${U.esc(sql)}</pre>
           </details>
