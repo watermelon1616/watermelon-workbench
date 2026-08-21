@@ -58,14 +58,33 @@ const Sync = (() => {
   function getConfig() { return cfg ? { url: cfg.url || '', anonKey: cfg.anonKey || '' } : { url: '', anonKey: '' }; }
   function userEmail() { return sess && sess.user ? (sess.user.email || '') : ''; }
 
-  // ---------- 初始化：恢复会话 ----------
+  // ---------- 初始化：恢复会话 / 处理邮件链接回调 ----------
   async function init() {
     loadCfg();
     if (!isConfigured()) { setStatus('disconnected', '未连接云端'); return; }
     try {
       const c = await ensureClient();
-      const { data } = await c.auth.getSession();
-      sess = data && data.session;
+      const h = location.hash || '';
+
+      if (h.includes('access_token')) {
+        // 邮件链接（magic link）跳回：自动读取 token 完成登录
+        const { data, error } = await c.auth.getSessionFromUrl({ storeSession: true });
+        if (error) throw error;
+        if (data && data.session) {
+          sess = data.session;
+          history.replaceState(null, '', location.pathname + location.search); // 清掉 URL 里的 token
+        }
+      } else if (h.includes('error=')) {
+        // 链接无效 / 过期
+        const m = h.match(/error_description=([^&]+)/);
+        setStatus('disconnected', '邮件链接已失效：' + (m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '请重新发送验证码'));
+        history.replaceState(null, '', location.pathname + location.search);
+        return;
+      } else {
+        const { data } = await c.auth.getSession();
+        sess = data && data.session;
+      }
+
       c.auth.onAuthStateChange((event, session) => {
         sess = session;
         if (session) setStatus('connected', '已连接云端');
@@ -105,7 +124,11 @@ const Sync = (() => {
       const c = await ensureClient();
       const { error } = await c.auth.signInWithOtp({
         email: (email || '').trim(),
-        options: { shouldCreateUser: true, data: { app: 'workbench' } }
+        options: {
+          shouldCreateUser: true,
+          data: { app: 'workbench' },
+          emailRedirectTo: location.origin + location.pathname
+        }
       });
       if (error) throw error;
       setStatus('connecting', '验证码已发送到邮箱，请查收');
