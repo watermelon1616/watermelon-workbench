@@ -276,12 +276,55 @@ const Store = (() => {
     setTimeout(() => URL.revokeObjectURL(a.href), 3000);
   }
 
-  function importFile(file, cb) {
+  // ---------- 合并导入辅助 ----------
+  function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
+  function deepClone(v) { try { return JSON.parse(JSON.stringify(v)); } catch (e) { return v; } }
+
+  // 数组合并去重：对象按 id/key/date/ts/time/createdAt 去重，标量按值去重
+  function mergeArrays(a, b) {
+    const seen = new Set();
+    const out = [];
+    const keyOf = (x) => {
+      if (isObj(x)) return x.id || x.key || x.date || x.ts || x.time || x.createdAt || JSON.stringify(x);
+      return String(x);
+    };
+    for (const item of [].concat(a || [], b || [])) {
+      const kk = keyOf(item);
+      if (!seen.has(kk)) { seen.add(kk); out.push(item); }
+    }
+    return out;
+  }
+
+  // 把 src 合并进 target：字典键并集、数组去重合并、数字取 max、其余标量保留 target 现有值（不覆盖）
+  function mergeInto(target, src) {
+    for (const k of Object.keys(src)) {
+      if (k.startsWith('__')) continue;
+      const sv = src[k], tv = target[k];
+      if (Array.isArray(sv)) {
+        target[k] = mergeArrays(tv && Array.isArray(tv) ? tv : [], sv);
+      } else if (isObj(sv)) {
+        if (!isObj(tv)) target[k] = deepClone(sv);
+        else mergeInto(tv, sv);
+      } else {
+        if (tv === undefined || tv === null) target[k] = sv;
+        else if (typeof tv === 'number' && typeof sv === 'number') target[k] = Math.max(tv, sv);
+        // 其他标量（含字符串配置）：保留当前设备现有值，不覆盖
+      }
+    }
+  }
+
+  // 合并导入：以当前数据为基础，把备份数据合并进来（不覆盖现有）
+  function mergeImport(incoming) {
+    mergeInto(data, incoming || {});
+  }
+
+  function importFile(file, cb, mode) {
     const rd = new FileReader();
     rd.onload = () => {
       try {
         const obj = JSON.parse(rd.result);
-        data = merge(defaults(), obj);
+        if (mode === 'merge') mergeImport(obj);
+        else data = merge(defaults(), obj);
         flush();
         cb(true);
       } catch (e) { cb(false, e.message); }
