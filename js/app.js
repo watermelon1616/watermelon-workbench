@@ -268,7 +268,7 @@ const App = (() => {
         <input class="set-input" id="sbEmail" type="email" placeholder="you@example.com" value="">
       </div>
       <div class="set-row set-inline">
-        <input class="set-input" id="sbCode" type="text" inputmode="numeric" placeholder="6~8 位验证码（收到链接直接点即可）" maxlength="8">
+        <input class="set-input" id="sbCode" type="text" inputmode="numeric" placeholder="把邮件里的 6~8 位数字码填这里（不要点链接）" maxlength="8">
         <button class="mini-btn" id="sbSend">发送验证码</button>
         <button class="mini-btn" id="sbLogin">登录并同步</button>
       </div>`;
@@ -309,7 +309,7 @@ const App = (() => {
             <summary>如何获取 Supabase 配置 / 建表？</summary>
             <ol>
               <li>supabase.com 建免费项目</li>
-              <li>Authentication → Sign In / Up → Email（或 Providers → Email），<b>关闭 Confirm email</b>，确保发送的是 6~8 位数字验证码（部分邮箱会提前点掉魔法链接，导致登录失败）</li>
+              <li>Authentication → Sign In / Up → Email（或 Providers → Email），<b>关闭 Confirm email</b>；关闭后邮件发的是 6~8 位<b>数字码</b>（不是链接），把数字码填进上方"验证码"框点"登录并同步"即可，<b>切勿点邮件里的链接</b>（邮箱预抓取会消耗一次性链接）</li>
               <li>Authentication → URL Configuration：Site URL 改成你的工作台地址；Redirect URLs 添加一条 <code>https://watermelon1616.github.io/watermelon-workbench/**</code></li>
               <li>SQL Editor 粘贴下面语句执行（建表 + 权限）</li>
               <li>Project Settings → API 复制 Project URL 与 anon public key 填上方</li>
