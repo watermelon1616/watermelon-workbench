@@ -65,19 +65,51 @@ const Sync = (() => {
     try {
       const c = await ensureClient();
       const h = location.hash || '';
+      const q = new URLSearchParams(location.search || '');
+      const qErr = q.get('error');
+      const qErrDesc = q.get('error_description');
+      const qCode = q.get('code');
+      const qToken = q.get('access_token');
 
-      if (h.includes('access_token')) {
-        // 邮件链接（magic link）跳回：自动读取 token 完成登录
+      console.log('[Sync] init hash=', h.slice(0, 60), 'query=', { error: qErr, code: !!qCode, access_token: !!qToken });
+
+      if (qErr) {
+        setStatus('error', '登录失败：' + (qErrDesc ? decodeURIComponent(qErrDesc.replace(/\+/g, ' ')) : qErr));
+        history.replaceState(null, '', location.pathname);
+        return;
+      }
+
+      if (qCode) {
+        // 部分邮件/网络环境把 token 以 ?code=xxx 形式带回（PKCE）
+        console.log('[Sync] exchanging code for session');
+        const { data, error } = await c.auth.exchangeCodeForSession(qCode);
+        if (error) throw error;
+        if (data && data.session) {
+          sess = data.session;
+          history.replaceState(null, '', location.pathname);
+          console.log('[Sync] code exchanged, session ok');
+        } else {
+          setStatus('error', '登录链接已失效，请重新发送验证码');
+          history.replaceState(null, '', location.pathname);
+          return;
+        }
+      } else if (h.includes('access_token')) {
+        // 标准 magic link：#access_token=...
+        console.log('[Sync] reading session from URL hash');
         const { data, error } = await c.auth.getSessionFromUrl({ storeSession: true });
         if (error) throw error;
         if (data && data.session) {
           sess = data.session;
-          history.replaceState(null, '', location.pathname + location.search); // 清掉 URL 里的 token
+          history.replaceState(null, '', location.pathname + location.search);
+          console.log('[Sync] hash session ok');
+        } else {
+          setStatus('error', '登录链接已失效，请重新发送验证码');
+          history.replaceState(null, '', location.pathname + location.search);
+          return;
         }
       } else if (h.includes('error=')) {
-        // 链接无效 / 过期
         const m = h.match(/error_description=([^&]+)/);
-        setStatus('disconnected', '邮件链接已失效：' + (m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '请重新发送验证码'));
+        setStatus('error', '登录失败：' + (m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '请重新发送验证码'));
         history.replaceState(null, '', location.pathname + location.search);
         return;
       } else {
@@ -86,12 +118,14 @@ const Sync = (() => {
       }
 
       c.auth.onAuthStateChange((event, session) => {
+        console.log('[Sync] auth state change', event);
         sess = session;
         if (session) setStatus('connected', '已连接云端');
         else setStatus('disconnected', '未连接云端');
       });
       setStatus(sess ? 'connected' : 'disconnected', sess ? '已连接云端' : '已配置，请登录');
     } catch (e) {
+      console.error('[Sync] init error', e);
       setStatus('error', '连接失败：' + (e.message || e));
     }
   }
