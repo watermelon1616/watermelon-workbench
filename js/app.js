@@ -120,6 +120,9 @@ const App = (() => {
       });
       fm.value = '';
     };
+    // 设置（含云端同步）
+    const bs = document.getElementById('btnSettings');
+    if (bs) bs.onclick = openSettings;
   }
 
   // ---------- 备份提醒条 ----------
@@ -230,9 +233,152 @@ const App = (() => {
     });
   }
 
+  // ---------- 云端同步状态标识 ----------
+  function renderSyncStatus(state, text) {
+    const dot = document.getElementById('syncDot');
+    const txt = document.getElementById('syncText');
+    if (!dot || !txt) return;
+    dot.className = 'sync-dot ' +
+      (state === 'connected' ? 'on' : state === 'syncing' || state === 'connecting' ? 'busy' : 'off');
+    txt.textContent = text || (state === 'connected' ? '已连接云端' : '未连接云端');
+  }
+
+  // ---------- 设置弹窗（含云端同步） ----------
+  function openSettings() {
+    const root = document.getElementById('modalRoot');
+    const cfg = Sync.getConfig();
+    const signedIn = Sync.isSignedIn();
+    const auto = Sync.isAuto();
+    const email = Sync.userEmail();
+
+    const sql = 'create table if not exists workbench_data (\n  user_id uuid primary key references auth.users(id) on delete cascade,\n  data jsonb not null default \'{}\'::jsonb,\n  updated_at timestamptz not null default now()\n);\nalter table workbench_data enable row level security;\ncreate policy "own row" on workbench_data\n  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);';
+
+    const authBlock = signedIn ? `
+      <div class="set-row">
+        <label>已登录</label>
+        <div class="set-line">📧 ${U.esc(email)} <button class="mini-btn" id="sbOut">退出登录</button></div>
+      </div>
+      <div class="set-row">
+        <label>立即同步</label>
+        <button class="mini-btn" id="sbNow">↑ 把本机数据推到云端</button>
+      </div>`
+      : `
+      <div class="set-row">
+        <label>邮箱</label>
+        <input class="set-input" id="sbEmail" type="email" placeholder="you@example.com" value="">
+      </div>
+      <div class="set-row set-inline">
+        <input class="set-input" id="sbCode" type="text" inputmode="numeric" placeholder="邮箱里的 6 位验证码" maxlength="8">
+        <button class="mini-btn" id="sbSend">发送验证码</button>
+        <button class="mini-btn" id="sbLogin">登录并同步</button>
+      </div>`;
+
+    root.innerHTML = `
+      <div class="modal-mask">
+        <div class="modal set-modal">
+          <h3>⚙️ 设置</h3>
+          <p class="m-sub">云端同步：让手机和电脑共用同一份数据</p>
+
+          <div class="sync-status big" id="syncStatus2">
+            <span class="sync-dot" id="syncDot2"></span>
+            <span id="syncText2"></span>
+          </div>
+
+          <div class="set-sec">
+            <div class="set-row">
+              <label>Supabase 项目 URL</label>
+              <input class="set-input" id="sbUrl" type="text" placeholder="https://xxxx.supabase.co" value="${U.esc(cfg.url)}">
+            </div>
+            <div class="set-row">
+              <label>Anon Key（公开密钥）</label>
+              <input class="set-input" id="sbKey" type="text" placeholder="eyJhbGciOi..." value="${U.esc(cfg.anonKey)}">
+            </div>
+            <button class="mini-btn" id="sbSaveCfg">保存配置</button>
+          </div>
+
+          <div class="set-sec">
+            <h4>账号（各设备用同一邮箱 = 同一份数据）</h4>
+            ${authBlock}
+          </div>
+
+          <div class="set-row set-inline">
+            <label class="set-check"><input type="checkbox" id="sbAuto" ${auto ? 'checked' : ''}> 自动同步（改完自动上传云端）</label>
+          </div>
+
+          <details class="set-help">
+            <summary>如何获取 Supabase 配置 / 建表？</summary>
+            <ol>
+              <li>supabase.com 建免费项目</li>
+              <li>Authentication → Providers → Email，确认开启（要"验证码登录"就勾 Email OTP）</li>
+              <li>SQL Editor 粘贴下面语句执行（建表 + 权限）</li>
+              <li>Project Settings → API 复制 Project URL 与 anon public key 填上方</li>
+            </ol>
+            <pre class="set-sql">${U.esc(sql)}</pre>
+          </details>
+
+          <div class="modal-foot">
+            <button class="btn" id="sbClose">关闭</button>
+          </div>
+        </div>
+      </div>`;
+
+    const close = () => { root.innerHTML = ''; };
+    root.querySelector('.modal-mask').onclick = (e) => { if (e.target.classList.contains('modal-mask')) close(); };
+    document.getElementById('sbClose').onclick = close;
+
+    // 同步状态（弹窗内也显示）
+    Sync.onStatus((s, t) => {
+      const d = document.getElementById('syncDot2'), x = document.getElementById('syncText2');
+      if (d) d.className = 'sync-dot ' + (s === 'connected' ? 'on' : s === 'syncing' || s === 'connecting' ? 'busy' : 'off');
+      if (x) x.textContent = t;
+    });
+
+    document.getElementById('sbSaveCfg').onclick = async () => {
+      const r = await Sync.configure(document.getElementById('sbUrl').value, document.getElementById('sbKey').value);
+      if (!r.ok) U.toast('连接失败：' + r.err, 'err');
+      openSettings(); // 重建以反映登录态
+    };
+
+    const autoEl = document.getElementById('sbAuto');
+    if (autoEl) autoEl.onchange = () => Sync.setAuto(autoEl.checked);
+
+    if (signedIn) {
+      document.getElementById('sbOut').onclick = async () => { await Sync.signOut(); openSettings(); };
+      document.getElementById('sbNow').onclick = async () => { await Sync.push(Store.data); U.toast('已推送到云端 ☁️', 'ok'); };
+    } else {
+      document.getElementById('sbSend').onclick = async () => {
+        const em = document.getElementById('sbEmail').value;
+        if (!em) { U.toast('请先填邮箱', 'warn'); return; }
+        const r = await Sync.signIn(em);
+        if (r.ok) U.toast('验证码已发送到邮箱', 'ok'); else U.toast('发送失败：' + r.err, 'err');
+      };
+      document.getElementById('sbLogin').onclick = async () => {
+        const em = document.getElementById('sbEmail').value;
+        const code = document.getElementById('sbCode').value;
+        if (!em || !code) { U.toast('请填邮箱和验证码', 'warn'); return; }
+        const r = await Sync.verifyOtp(em, code);
+        if (r.ok) {
+          U.toast('登录成功，正在同步…', 'ok');
+          const remote = await Sync.pull();
+          if (remote) { Store.setData(remote); U.toast('已拉取云端数据 ☁️', 'ok'); }
+          openSettings();
+        } else U.toast('登录失败：' + r.err, 'err');
+      };
+    }
+  }
+
   // ---------- 启动 ----------
   async function boot() {
     await Store.load();
+
+    // 云端同步初始化：恢复会话 + 拉取最新数据
+    try {
+      await Sync.init();
+      if (Sync.isConfigured() && Sync.isSignedIn()) {
+        const remote = await Sync.pull();
+        if (remote) { Store.setData(remote); U.toast('已从云端同步最新数据 ☁️', 'ok'); }
+      }
+    } catch (e) { console.warn('云端同步初始化失败', e); }
 
     // 显示数据存放位置
     const pathEl = document.getElementById('savePath');
@@ -266,6 +412,7 @@ const App = (() => {
     bindDrawer();
     bindInstall();
     bindGlobalStop();
+    if (window.Sync) Sync.onStatus(renderSyncStatus);  // 同步状态标识实时刷新
     paint();
 
     // 每天第一次打开时的问候
