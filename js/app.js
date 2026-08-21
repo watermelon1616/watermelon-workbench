@@ -268,7 +268,7 @@ const App = (() => {
         <input class="set-input" id="sbEmail" type="email" placeholder="you@example.com" value="">
       </div>
       <div class="set-row set-inline">
-        <input class="set-input" id="sbCode" type="text" inputmode="numeric" placeholder="邮箱里的 6 位验证码" maxlength="8">
+        <input class="set-input" id="sbCode" type="text" inputmode="numeric" placeholder="6~8 位验证码（收到链接直接点即可）" maxlength="8">
         <button class="mini-btn" id="sbSend">发送验证码</button>
         <button class="mini-btn" id="sbLogin">登录并同步</button>
       </div>`;
@@ -309,9 +309,10 @@ const App = (() => {
             <summary>如何获取 Supabase 配置 / 建表？</summary>
             <ol>
               <li>supabase.com 建免费项目</li>
-              <li>Authentication → Providers → Email，确认开启（要"验证码登录"就勾 Email OTP）</li>
+              <li>Authentication → Providers → Email，确认开启；默认即支持 OTP（6~8 位数字）和魔法链接</li>
               <li>SQL Editor 粘贴下面语句执行（建表 + 权限）</li>
               <li>Project Settings → API 复制 Project URL 与 anon public key 填上方</li>
+              <li>Authentication → URL Configuration → Site URL 改成你的云端版地址，否则邮件链接会跳错页面</li>
             </ol>
             <pre class="set-sql">${U.esc(sql)}</pre>
           </details>
