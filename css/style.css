@@ -734,6 +734,48 @@ ul { list-style: none; }
 .modal-foot { display: flex; gap: 10px; margin-top: 20px; }
 .modal-foot .btn { flex: 1; }
 
+/* ---------- 云端同步状态标识 ---------- */
+.sync-status {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12px; font-weight: 600; color: var(--text-mid);
+  padding: 5px 8px; border-radius: 9px; background: rgba(0,0,0,.03);
+  margin-bottom: 8px;
+}
+.sync-status.big { font-size: 13.5px; margin: 4px 0 14px; background: rgba(0,0,0,.035); }
+.sync-dot {
+  width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--melon-red); transition: background .2s;
+}
+.sync-dot.on { background: #2fae6b; box-shadow: 0 0 0 3px rgba(47,174,107,.18); }
+.sync-dot.busy { background: var(--yellow-deep); animation: pulse .9s infinite; }
+.sync-dot.off { background: var(--melon-red); box-shadow: 0 0 0 3px rgba(255,92,110,.18); }
+
+/* ---------- 设置弹窗 ---------- */
+.set-modal { max-width: 460px; }
+.set-sec { border-top: 1px solid rgba(0,0,0,.06); padding-top: 14px; margin-top: 14px; }
+.set-sec h4 { font-size: 13.5px; margin-bottom: 10px; color: var(--text-deep); }
+.set-row { margin-bottom: 11px; }
+.set-row > label { display: block; font-size: 12.5px; color: var(--text-mid); margin-bottom: 5px; }
+.set-input {
+  width: 100%; box-sizing: border-box; padding: 9px 11px;
+  border: 1.5px solid #e6dcc4; border-radius: 10px; font-size: 13px;
+  background: #fffdf6; color: var(--text-deep); font-family: inherit;
+}
+.set-input:focus { outline: none; border-color: var(--yellow); }
+.set-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.set-inline .set-input { flex: 1; min-width: 140px; }
+.set-line { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.set-check { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
+.set-check input { width: 16px; height: 16px; }
+.set-help { margin-top: 14px; font-size: 12.5px; color: var(--text-mid); }
+.set-help summary { cursor: pointer; font-weight: 600; color: var(--text-deep); }
+.set-help ol { margin: 8px 0; padding-left: 18px; }
+.set-help li { margin: 3px 0; }
+.set-sql {
+  background: #2b2718; color: #ffe9a8; border-radius: 8px; padding: 10px 12px;
+  font-size: 11.5px; line-height: 1.5; overflow-x: auto; white-space: pre;
+}
+
 .fade-in { animation: fadeUp .35s ease; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(9px); } }
 
