@@ -198,11 +198,10 @@ ul { list-style: none; }
 .page-title h1 { font-size: 23px; letter-spacing: 1px; line-height: 1.3; white-space: nowrap; }
 .page-title p { margin-top: 5px; font-size: 13px; color: var(--text-mid); }
 
-/* 桌面端：页头整页铺满、无视左侧侧边栏宽度，标题真正居中于整屏 */
+/* 桌面端：页头只在右侧主内容区居中，不覆盖左侧侧边栏 */
 @media (min-width: 769px) {
   .page-head {
-    margin-left: calc(-1 * var(--sidebar-w));
-    width: calc(100% + var(--sidebar-w));
+    width: 100%;
     box-sizing: border-box;
     background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,0));
     padding: 6px 34px 14px;
